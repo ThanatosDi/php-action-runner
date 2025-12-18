@@ -61,3 +61,5 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php }}
             PHP_EXTENSIONS=${{ env.PHP_EXTENSIONS }}
+          cache-from: type=gha,scope=build-${{ matrix.php }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.php }}
