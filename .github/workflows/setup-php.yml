@@ -11,6 +11,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   PHP_EXTENSIONS: ${{ vars.PHP_EXTENSIONS }}
+  DOCKER_BUILD_RECORD_UPLOAD: false
 
 jobs:
   build-and-push:
