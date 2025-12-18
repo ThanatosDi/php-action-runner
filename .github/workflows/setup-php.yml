@@ -10,7 +10,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PUSH: ${{ vars.PUSH }}
   PHP_EXTENSIONS: ${{ vars.PHP_EXTENSIONS }}
 
 jobs:
@@ -52,7 +51,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{  env.push }}
+          push: ${{ vars.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
