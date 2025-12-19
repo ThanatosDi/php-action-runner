@@ -9,6 +9,9 @@ ARG PHP_VERSION=8.4
 ARG PHP_EXTENSIONS=mongodb redis sqlite3 gd bcmath
 ARG RUNNER_VERSION=2.330.0
 
+# 安裝 git
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 # 安裝擴充套件工具
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
@@ -18,7 +21,7 @@ RUN install-php-extensions \
     ${PHP_EXTENSIONS}
 
 RUN  curl -L -o runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" &&\
-    tar xzf runner.tar.gz ./externals/node24 &&\
+    tar xzf runner.tar.gz ./externals &&\
     mkdir -p /__e &&\
     mv externals/* /__e/ &&\
     rm -rf runner.tar.gz externals
