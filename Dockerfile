@@ -17,16 +17,11 @@ RUN install-php-extensions \
     @composer \
     ${PHP_EXTENSIONS}
 
-RUN  curl -L -o runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
-    # 解壓縮：只取出 externals/node24
-    && tar xzf runner.tar.gz externals/node24 \
-    # 建立目標資料夾
-    && mkdir -p /_e \
-    # 將 externals 資料夾下的內容移動到 /_e
-    # 結果路徑會變成 /_e/node24/bin/node
-    && mv externals/* /_e/ \
-    # 清理垃圾
-    && rm -rf runner.tar.gz externals
+RUN  curl -L -o runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" &&\
+    tar xzf runner.tar.gz ./externals/node24 &&\
+    mkdir -p /_e &&\
+    mv externals/* /_e/ &&\
+    rm -rf runner.tar.gz externals
 
 # 驗證安裝
 RUN php -v && composer -V

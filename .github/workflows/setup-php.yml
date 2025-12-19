@@ -11,7 +11,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   PHP_EXTENSIONS: ${{ vars.PHP_EXTENSIONS }}
-  RUNNER_VERSION: ${{ vars.RUNNER_VERSION }}
   DOCKER_BUILD_RECORD_UPLOAD: false
 
 jobs:
@@ -34,6 +33,22 @@ jobs:
       - name: Get current date
         id: date
         run: echo "today=$(TZ=Asia/Taipei date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Get latest release version
+        id: action_runner_version
+        env:
+          GH_TOKEN: ${{ github.token }} # 必須提供 Token 避免 API 限制
+        run: |
+          # 使用 gh cli 取得 tag name
+          TAG_NAME=$(gh release view --repo actions/runner --json tagName --jq .tagName)
+          
+          # 去掉開頭的 v
+          VERSION=${TAG_NAME#v}
+          
+          echo "Detected version: $VERSION"
+          
+          # 寫入 output 供後續步驟使用
+          echo "runner_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -66,6 +81,6 @@ jobs:
           build-args: |
             PHP_VERSION=${{ matrix.php }}
             PHP_EXTENSIONS=${{ env.PHP_EXTENSIONS }}
-            RUNNER_VERSION=${{ env.RUNNER_VERSION }}
+            RUNNER_VERSION=${{ steps.action_runner_version.outputs.runner_version }}
           cache-from: type=gha,scope=build-${{ matrix.php }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.php }}
