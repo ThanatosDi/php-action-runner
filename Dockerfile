@@ -19,8 +19,8 @@ RUN install-php-extensions \
 
 RUN  curl -L -o runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" &&\
     tar xzf runner.tar.gz ./externals/node24 &&\
-    mkdir -p /_e &&\
-    mv externals/* /_e/ &&\
+    mkdir -p /__e &&\
+    mv externals/* /__e/ &&\
     rm -rf runner.tar.gz externals
 
 # 驗證安裝
