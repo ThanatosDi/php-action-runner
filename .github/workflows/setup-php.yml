@@ -46,7 +46,7 @@ jobs:
       - name: Setup Image Name
         shell: bash
         run: |
-          echo "IMAGE_NAME=${REGISTRY }/${REPO_NAME,,}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${REGISTRY}/${REPO_NAME,,}" >> $GITHUB_ENV
             
   build:
     name: Build PHP${{ matrix.php-version }} ${{ matrix.platform }}
