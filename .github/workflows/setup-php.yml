@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ toLowerCase(github.repository) }}
+  REPO_NAME: ${{ github.repository }}
   DOCKER_BUILD_RECORD_UPLOAD: false
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
-      - name: Check release date with JavaScript
+      - name: Check release date
         id: check
         uses: actions/github-script@v7
         with:
@@ -43,6 +43,10 @@ jobs:
             } else {
               core.setOutput('should_build', 'false');
             }
+      - name: Setup Image Name
+        shell: bash
+        run: |
+          echo "IMAGE_NAME=${REGISTRY }/${REPO_NAME,,}" >> $GITHUB_ENV
             
   build:
     name: Build PHP${{ matrix.php-version }} ${{ matrix.platform }}
@@ -78,7 +82,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
 
       - name: Build and Push by Digest
         id: build
@@ -93,7 +97,7 @@ jobs:
             PHP_VERSION=${{ matrix.php-version }}
           # 關鍵設定：這裡一定要輸出 type=image 並且 push-by-digest=true
           # 這樣才不會互相覆蓋 Tag，而是產生獨立的 Manifest
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=build-${{ matrix.php-version }}-${{ matrix.slug }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.php-version }}-${{ matrix.slug }}
 
@@ -135,7 +139,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           # 這裡設定 Tag 規則，例如 ghcr.io/user/repo:8.1
           tags: |
             type=raw,value=${{ matrix.php-version }}
@@ -153,11 +157,11 @@ jobs:
         # 使用 imagetools 將所有下載下來的 digest 合併並推送到 registry
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect Image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
       # - name: Build and push Docker image
       #   uses: docker/build-push-action@v6
