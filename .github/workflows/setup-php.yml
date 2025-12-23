@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Build PHP Action Runner
 
 on:
   push:
@@ -10,12 +10,45 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PHP_EXTENSIONS: ${{ vars.PHP_EXTENSIONS }}
   DOCKER_BUILD_RECORD_UPLOAD: false
 
 jobs:
-  build-and-push:
+  check-release:
+    name: 檢查 myoung34/docker-github-actions-runner 版本
     runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: Check release date with JavaScript
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 1. 直接調用 API 獲取最新 Release
+            const { data: release } = await github.rest.repos.getLatestRelease({
+              owner: 'myoung34',
+              repo: 'docker-github-actions-runner'
+            });
+
+            // 2. 計算時間差
+            const publishedTime = new Date(release.published_at).getTime();
+            const currentTime = new Date().getTime();
+            const diffHours = (currentTime - publishedTime) / (1000 * 60 * 60);
+
+            console.log(`Latest release: ${release.tag_name}, published ${diffHours.toFixed(2)} hours ago.`);
+
+            // 3. 設定 Output (24小時內)
+            if (diffHours < 24) {
+              core.setOutput('should_build', 'true');
+            } else {
+              core.setOutput('should_build', 'false');
+            }
+            
+  build:
+    name: Build PHP${{ matrix.php-version }} ${{ matrix.platform }}
+    needs: check-release
+    if: ${{ needs.check-release.outputs.should_build == 'true' }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -24,41 +57,78 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.2', '8.3', '8.4']
+        php-version: ['8.1', '8.2', '8.3', '8.4']
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            slug: 'amd64'
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            slug: 'arm64'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and Push by Digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ vars.PUSH == 'true' }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+          # 關鍵設定：這裡一定要輸出 type=image 並且 push-by-digest=true
+          # 這樣才不會互相覆蓋 Tag，而是產生獨立的 Manifest
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=build-${{ matrix.php-version }}-${{ matrix.slug }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.php-version }}-${{ matrix.slug }}
+
+      - name: Export Digest
+        # 將產生的 Digest 存成檔案，供下一個 Merge Job 使用
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload Digest Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-php${{ matrix.php-version }}-${{ matrix.slug }}-${{ strategy.job-index }} # 使用 index 避免名稱衝突
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # 合併 Image 並推送最終 Tag
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
       - name: Get current date
         id: date
         run: echo "today=$(TZ=Asia/Taipei date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
-      - name: Get latest release version
-        id: action_runner_version
-        env:
-          GH_TOKEN: ${{ github.token }} # 必須提供 Token 避免 API 限制
-        run: |
-          # 使用 gh cli 取得 tag name
-          TAG_NAME=$(gh release view --repo actions/runner --json tagName --jq .tagName)
-          
-          # 去掉開頭的 v
-          VERSION=${TAG_NAME#v}
-          
-          echo "Detected version: $VERSION"
-          
-          # 寫入 output 供後續步驟使用
-          echo "runner_version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -67,21 +137,37 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # 這裡設定 Tag 規則，例如 ghcr.io/user/repo:8.1
           tags: |
-            type=raw,value=${{ matrix.php }}
-            type=raw,value=${{ matrix.php }}-${{ steps.date.outputs.today }}
+            type=raw,value=${{ matrix.php-version }}
+            type=raw,value=${{ matrix.php-version }}-${{ steps.date.outputs.today }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
         with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ vars.PUSH == 'true' }}
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            PHP_VERSION=${{ matrix.php }}
-            PHP_EXTENSIONS=${{ env.PHP_EXTENSIONS }}
-            RUNNER_VERSION=${{ steps.action_runner_version.outputs.runner_version }}
-          cache-from: type=gha,scope=build-${{ matrix.php }}
-          cache-to: type=gha,mode=max,scope=build-${{ matrix.php }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Create Manifest List and Push
+        working-directory: /tmp/digests
+        # 使用 imagetools 將所有下載下來的 digest 合併並推送到 registry
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect Image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+
+      # - name: Build and push Docker image
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile
+      #     push: ${{ vars.PUSH == 'true' }}
+      #     platforms: linux/amd64,linux/arm64
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
+      #     build-args: |
+      #       PHP_VERSION=${{ matrix.php-version }}
+      #     cache-from: type=gha,scope=build-${{ matrix.php-version }}
+      #     cache-to: type=gha,mode=max,scope=build-${{ matrix.php-version }}
