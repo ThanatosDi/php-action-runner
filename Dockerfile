@@ -3,8 +3,6 @@ FROM myoung34/github-runner:ubuntu-noble
 
 # 重要：再次宣告 ARG，因為 FROM 之後 ARG 會被重置
 ARG PHP_VERSION=8.4
-ARG PHP_EXTENSIONS=mongodb redis sqlite3 gd bcmath
-ARG RUNNER_VERSION=2.330.0
 
 # 設定環境變數，避免安裝過程出現互動視窗
 ENV DEBIAN_FRONTEND=noninteractive
