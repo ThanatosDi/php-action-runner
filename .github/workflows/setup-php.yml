@@ -47,7 +47,7 @@ jobs:
   build:
     name: Build PHP${{ matrix.php-version }} ${{ matrix.platform }}
     needs: check-release
-    if: ${{ needs.check-release.outputs.should_build == 'true' }}
+    # if: ${{ needs.check-release.outputs.should_build == 'true' }}
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
