@@ -15,7 +15,7 @@ env:
   DOCKER_BUILD_RECORD_UPLOAD: false
   GHCR_IMAGE_NAME: ghcr.io/thanatosdi/php-runtime
   DOCKERHUB_IMAGE_NAME: docker.io/thanatosdi/php-runtime
-  GITLAB_IMAGE_NAME: registry.gitlab.com/thanatosdi/php-runtime
+  GITLAB_IMAGE_NAME: registry.gitlab.com/thanatosdi/php-action-runner
 
 jobs:
   build:
@@ -93,7 +93,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload Digest Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digests-php${{ matrix.php-version }}-${{ matrix.slug }}
           path: /tmp/digests/*
