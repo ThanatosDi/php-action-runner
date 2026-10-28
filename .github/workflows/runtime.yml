@@ -15,6 +15,7 @@ env:
   DOCKER_BUILD_RECORD_UPLOAD: false
   GHCR_IMAGE_NAME: ghcr.io/thanatosdi/php-runtime
   DOCKERHUB_IMAGE_NAME: docker.io/thanatosdi/php-runtime
+  GITLAB_IMAGE_NAME: registry.gitlab.com/thanatosdi/php-runtime
 
 jobs:
   build:
@@ -142,3 +143,16 @@ jobs:
           registry: docker.io
           registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
           registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Merge Manifest to GitLab
+        uses: ThanatosDi/merge-docker-digests@main
+        with:
+          image-name: ${{ env.GITLAB_IMAGE_NAME }}
+          artifact-pattern: digests-php${{ matrix.php-version }}-*
+          tags: |
+            ${{ matrix.php-version }}
+            ${{ matrix.php-version }}-${{ steps.date.outputs.today }}
+          timezone: Asia/Taipei
+          registry: registry.gitlab.com
+          registry-username: ${{ secrets.GITLAB_USERNAME }}
+          registry-password: ${{ secrets.GITLAB_TOKEN }}
